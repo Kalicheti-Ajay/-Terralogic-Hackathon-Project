@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Today’s Overview</h2>
+
+<div class="cards">
+  <div class="card"><div class="k">Open</div><div id="openVal" class="v">0</div></div>
+  <div class="card"><div class="k">In Progress</div><div id="inprogVal" class="v">0</div></div>
+  <div class="card"><div class="k">Completed</div><div id="doneVal" class="v">0</div></div>
+  <div class="card"><div class="k">Blocked</div><div id="blockedVal" class="v">0</div></div>
+  <div class="card"><div class="k">Closed Today</div><div id="todayVal" class="v">0</div></div>
+  <div class="card"><div class="k">Last Hour</div><div id="hourVal" class="v">0</div></div>
+  <div class="card"><div class="k">Completion %</div><div id="rateVal" class="v">0%</div></div>
+</div>
+
+<h3>7-Day Trend</h3>
+<canvas id="trendChart"></canvas>
+
+<h3>Team Performance</h3>
+<canvas id="teamChart"></canvas>
+
+<script>
+async function getJSON(url){ const r = await fetch(url, {headers:{"X-Requested-With":"fetch"}}); return r.json(); }
+
+async function refreshCards(){
+  const s = await getJSON("/api/stats/");
+  document.getElementById("openVal").textContent = s.open;
+  document.getElementById("inprogVal").textContent = s.in_progress;
+  document.getElementById("doneVal").textContent = s.completed;
+  document.getElementById("blockedVal").textContent = s.blocked;
+  document.getElementById("todayVal").textContent = s.closed_today;
+  document.getElementById("hourVal").textContent = s.closed_last_hour;
+  document.getElementById("rateVal").textContent = s.completion_rate + "%";
+}
+
+let trendChart, teamChart;
+
+async function drawTrends(){
+  const t = await getJSON("/api/trends/");
+  const ctx = document.getElementById("trendChart");
+  if (trendChart) trendChart.destroy();
+  trendChart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: t.labels,
+      datasets: [
+        { label: "Tasks Created", data: t.created },
+        { label: "Tasks Completed", data: t.completed },
+      ]
+    }
+  });
+}
+
+async function drawTeam(){
+  const d = await getJSON("/api/team/");
+  const labels = d.teams.map(x => x.assignee);
+  const open = d.teams.map(x => x.open);
+  const inprog = d.teams.map(x => x.in_progress);
+  const done = d.teams.map(x => x.completed);
+  const ctx = document.getElementById("teamChart");
+  if (teamChart) teamChart.destroy();
+  teamChart = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [
+        { label: "Open", data: open },
+        { label: "In Progress", data: inprog },
+        { label: "Completed", data: done },
+      ]
+    },
+    options: { responsive: true, scales: { x: { stacked: true }, y: { stacked: true } } }
+  });
+}
+
+async function boot(){
+  await refreshCards();
+  await drawTrends();
+  await drawTeam();
+}
+boot();
+setInterval(boot, 15000); // refresh every 15s
+</script>
+{% endblock %}

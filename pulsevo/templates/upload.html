@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Upload Dataset (CSV / XLSX)</h2>
+<form method="post" enctype="multipart/form-data">
+  {% csrf_token %}
+  <input type="file" name="file" accept=".csv,.xlsx,.xls" required />
+  <button type="submit">Upload</button>
+</form>
+<p>Expected columns (case-insensitive): <code>Task ID, Title, Assignee, Status, Created At, [Completed At], [Project], [Priority], [Comments]</code></p>
+{% endblock %}
