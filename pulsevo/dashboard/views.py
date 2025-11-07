@@ -1,6 +1,7 @@
 import os
 import io
-import openai
+#import openai
+from dotenv import load_dotenv
 from django.views.decorators.csrf import csrf_exempt
 import pandas as pd
 from datetime import timedelta
@@ -15,6 +16,21 @@ from django.core.files.base import ContentFile
 from .models import Task
 from django.contrib.auth.decorators import login_required
 
+from django.db.models import Count, Q
+from django.http import JsonResponse
+from django.utils import timezone
+from .models import Task
+from datetime import timedelta
+
+#from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
+#from google_genai import client as genai_client
+import google.generativeai as genai
+
+load_dotenv()
+
+# ✅ Configure Gemini with API key
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 
 # --- helpers ---
@@ -186,42 +202,9 @@ def team_api(request):
     return JsonResponse({"teams": list(qs)})
 
 
-@csrf_exempt
-def ai_insights(request):
-    stats = stats_api(request).content.decode()
-    prompt = f"""
-    You are a productivity analyst AI. Based on these metrics, generate a short summary of the team's performance, 
-    highlighting task completion rate, bottlenecks, and improvement suggestions.
-    Metrics: {stats}
-    """
-    openai.api_key = os.getenv("OPENAI_API_KEY", "your-key-here")
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "system", "content": prompt}]
-        )
-        summary = response.choices[0].message.content
-    except Exception as e:
-        summary = f"AI module error: {e}"
-    return JsonResponse({"summary": summary})
 
-@csrf_exempt
-def ai_query(request):
-    if request.method == "POST":
-        user_query = request.POST.get("query", "")
-        metrics = stats_api(request).content.decode()
-        context = f"Team metrics: {metrics}"
-        prompt = f"Answer this query about team productivity: {user_query}. Context: {context}"
-        openai.api_key = os.getenv("OPENAI_API_KEY", "your-key-here")
-        try:
-            response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",
-                messages=[{"role": "system", "content": prompt}]
-            )
-            answer = response.choices[0].message.content
-        except Exception as e:
-            answer = f"Error: {e}"
-        return JsonResponse({"response": answer})
+
+
 
 def predictive_stats(request):
     days = 7
@@ -266,3 +249,168 @@ def tasks_view(request):
         "tasks_summary": grouped,
         "projects": list(projects),
     })
+
+
+
+# Load environment variables and configure Gemini
+#load_dotenv()
+#genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+
+@csrf_exempt
+@login_required
+def ai_insights(request):
+    """
+    Generates AI-driven natural language insights using Gemini.
+    Combines task data from the database with generative analysis.
+    """
+    now = timezone.now()
+    week_ago = now - timedelta(days=7)
+
+    total = Task.objects.count()
+    completed = Task.objects.filter(status="Completed").count()
+    open_tasks = Task.objects.filter(status="Open").count()
+    in_progress = Task.objects.filter(status="In Progress").count()
+    blocked = Task.objects.filter(status="Blocked").count()
+
+    recent_completions = Task.objects.filter(
+        status="Completed", completed_at__gte=week_ago
+    ).count()
+
+    top_performers = (
+        Task.objects.filter(status="Completed")
+        .values("assignee")
+        .annotate(done=Count("id"))
+        .order_by("-done")[:3]
+    )
+
+    completion_rate = round((completed / total) * 100, 1) if total else 0.0
+
+    # Convert key stats to text context for Gemini
+    context = f"""
+    Team productivity summary for this week:
+    - Total tasks: {total}
+    - Completed: {completed}
+    - Open: {open_tasks}
+    - In Progress: {in_progress}
+    - Blocked: {blocked}
+    - Recent completions: {recent_completions}
+    - Completion rate: {completion_rate}%
+    - Top performers: {', '.join([t['assignee'] for t in top_performers]) if top_performers else 'None'}
+    """
+
+    # Build a prompt for Gemini
+    prompt = f"""
+    You are an AI productivity analyst for the Pulsevo dashboard.
+    Using the data below, summarize team performance in 2–3 sentences.
+    Focus on trends, strengths, and possible bottlenecks.
+
+    {context}
+    """
+
+    # Call Gemini to generate the insight summary
+    try:
+        model = genai.GenerativeModel("gemini-2.5-flash")
+        response = model.generate_content(prompt)
+        summary_text = response.text.strip() if response.text else "No AI summary generated."
+    except Exception as e:
+        summary_text = f"Error generating AI summary: {str(e)}"
+
+    # Combine numeric + AI text output
+    summary = {
+        "total_tasks": total,
+        "completed": completed,
+        "open": open_tasks,
+        "in_progress": in_progress,
+        "blocked": blocked,
+        "completion_rate": completion_rate,
+        "recent_completions": recent_completions,
+        "top_performers": list(top_performers),
+        "ai_summary": summary_text,
+    }
+
+    return JsonResponse(summary)
+
+
+
+
+
+@csrf_exempt
+@login_required
+def gemini_query(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "POST required"}, status=400)
+
+    user_query = request.POST.get("query", "").strip()
+    if not user_query:
+        return JsonResponse({"error": "Empty query"}, status=400)
+
+    # ✅ 1️⃣ Global summary from database
+    now = timezone.now()
+    week_ago = now - timedelta(days=7)
+
+    total = Task.objects.count()
+    completed = Task.objects.filter(status="Completed").count()
+    open_tasks = Task.objects.filter(status="Open").count()
+    in_progress = Task.objects.filter(status="In Progress").count()
+    blocked = Task.objects.filter(status="Blocked").count()
+
+    top_assignee = (
+        Task.objects.filter(status="Completed")
+        .values("assignee")
+        .annotate(total=Count("id"))
+        .order_by("-total")
+        .first()
+    )
+
+    # ✅ 2️⃣ User-specific stats
+    user_name = request.user.username
+    print(user_name)
+    user_open = Task.objects.filter(assignee__iexact=user_name, status="Open").count()
+    user_blocked = Task.objects.filter(assignee__iexact=user_name, status="Blocked").count()
+    user_completed = Task.objects.filter(assignee__iexact=user_name, status="Completed").count()
+    user_total = Task.objects.filter(assignee__iexact=user_name).count()
+
+    # Avoid division by zero
+    user_completion_rate = round((user_completed / user_total) * 100, 1) if user_total else 0
+
+    # ✅ 3️⃣ Build AI context
+    context = f"""
+    🔹 Global Summary:
+    Total Tasks: {total}
+    Completed: {completed}
+    Open: {open_tasks}
+    In Progress: {in_progress}
+    Blocked: {blocked}
+    Top Performer: {top_assignee['assignee'] if top_assignee else 'N/A'}
+
+    🔸 Your Personal Summary ({user_name}):
+    Total Assigned Tasks: {user_total}
+    Completed: {user_completed}
+    Open: {user_open}
+    Blocked: {user_blocked}
+    Completion Rate: {user_completion_rate}%
+    """
+
+    # ✅ 4️⃣ Build prompt for Gemini
+    prompt = f"""
+    You are Pulsevo's AI Productivity Assistant.
+    Use the following project statistics and user-specific task data to answer questions
+    clearly, helpfully, and concisely. Offer insights, suggestions, or summaries based on this data.
+
+    Context:
+    {context}
+
+    User question:
+    {user_query}
+    """
+
+    # ✅ 5️⃣ Call Gemini API
+    try:
+        genai.configure(api_key=os.getenv("GEMINI_API_KEY"))  # Set in your .env
+        model = genai.GenerativeModel("gemini-2.5-flash")
+        response = model.generate_content(prompt)
+        answer = response.text.strip() if response.text else "No response from Gemini."
+    except Exception as e:
+        answer = f"⚠️ Gemini API error: {str(e)}"
+
+    return JsonResponse({"response": answer})

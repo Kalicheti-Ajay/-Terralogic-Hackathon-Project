@@ -11,6 +11,7 @@ redis = "*"
 djangorestframework = "*"
 python-dotenv = "*"
 openai = "*"
+google-generativeai = "*"
 
 [dev-packages]
 

@@ -42,10 +42,21 @@
   <div id="predictive" class="insight-box">Fetching predictions...</div>
 </section>
 
-<!-- AI Insights -->
+<!-- AI Insights Section -->
 <section class="ai-insights" id="ai-section">
   <h3>🤖 AI Insights Summary</h3>
-  <div id="ai-summary" class="insight-box">Loading AI-generated insights...</div>
+  <div id="ai-summary" class="insight-box">
+    <p><i>Loading AI-generated insights...</i></p>
+  </div>
+  <div id="ai-stats" class="ai-stats">
+    <p>📋 <b>Total Tasks:</b> <span id="totalVal">0</span></p>
+    <p>✅ <b>Completed:</b> <span id="completedVal">0</span></p>
+    <p>🚧 <b>In Progress:</b> <span id="inProgressVal">0</span></p>
+    <p>📂 <b>Open:</b> <span id="openTaskVal">0</span></p>
+    <p>⛔ <b>Blocked:</b> <span id="blockedTaskVal">0</span></p>
+    <p>📈 <b>Completion Rate:</b> <span id="completionVal">0%</span></p>
+    <p>🏅 <b>Top Performers:</b> <span id="performersVal">Loading...</span></p>
+  </div>
 </section>
 
 <!-- AI Query Assistant -->
@@ -63,7 +74,7 @@
 async function getJSON(url){ const res = await fetch(url); return res.json(); }
 
 // ----------------------------
-// Cards
+// Summary Cards
 // ----------------------------
 async function refreshCards(){
   const s = await getJSON("/api/stats/");
@@ -74,6 +85,47 @@ async function refreshCards(){
   document.getElementById("todayVal").textContent = s.closed_today;
   document.getElementById("hourVal").textContent = s.closed_last_hour;
   document.getElementById("rateVal").textContent = s.completion_rate + "%";
+}
+
+// ----------------------------
+// AI Insights
+// ----------------------------
+async function loadInsights(){
+  const box = document.getElementById("ai-summary");
+  const statsBox = document.getElementById("ai-stats");
+  box.innerHTML = "<p>🧠 Generating insights with Gemini...</p>";
+  try {
+    const data = await getJSON("/api/ai-insights/");
+    // Gemini summary
+    box.innerHTML = `
+      <p style="font-size:1.1rem; color:#8be9fd;">
+        ${data.ai_summary || "No AI summary available."}
+      </p>
+    `;
+    // Stats
+    document.getElementById("totalVal").textContent = data.total_tasks;
+    document.getElementById("completedVal").textContent = data.completed;
+    document.getElementById("inProgressVal").textContent = data.in_progress;
+    document.getElementById("openTaskVal").textContent = data.open;
+    document.getElementById("blockedTaskVal").textContent = data.blocked;
+    document.getElementById("completionVal").textContent = data.completion_rate + "%";
+    document.getElementById("performersVal").textContent =
+      data.top_performers && data.top_performers.length > 0
+        ? data.top_performers.map(p => `${p.assignee} (${p.done})`).join(", ")
+        : "No top performers yet.";
+  } catch (err) {
+    box.innerHTML = `<p style="color:#ff7675;">⚠️ Failed to load AI insights.</p>`;
+  }
+}
+
+// ----------------------------
+// Predictive Analytics
+// ----------------------------
+async function loadPredictive(){
+  const data = await getJSON("/api/predict/");
+  document.getElementById("predictive").innerHTML =
+    `<p>✅ Completed last 7 days: <b>${data.recent_completions}</b></p>
+     <p>🔮 Forecast for next week: <b>${data.forecast_next_week}</b> tasks</p>`;
 }
 
 // ----------------------------
@@ -94,11 +146,7 @@ async function drawTrends(){
         { label: "Completed", data: t.completed, borderColor: "#45d483", fill: false }
       ]
     },
-    options: {
-      responsive: true,
-      plugins: { legend: { labels: { color: "#ccc" } } },
-      scales: { x: { ticks: { color: "#ccc" } }, y: { ticks: { color: "#ccc" } } }
-    }
+    options: { responsive: true, plugins: { legend: { labels: { color: "#ccc" } } } }
   });
 }
 
@@ -125,38 +173,19 @@ async function drawTeam(){
 }
 
 // ----------------------------
-// Predictive Analytics
-// ----------------------------
-async function loadPredictive(){
-  const data = await getJSON("/api/predict/");
-  document.getElementById("predictive").innerHTML =
-    `<p>✅ Completed last 7 days: <b>${data.recent_completions}</b></p>
-     <p>🔮 Forecast for next week: <b>${data.forecast_next_week}</b> tasks</p>`;
-}
-
-// ----------------------------
-// AI Insights
-// ----------------------------
-async function loadInsights(){
-  const res = await fetch("/api/ai-insights/");
-  const data = await res.json();
-  document.getElementById("ai-summary").textContent = data.summary;
-}
-
-// ----------------------------
-// AI Query Assistant
+// Gemini Query Assistant
 // ----------------------------
 async function askAI(){
   const q = document.getElementById("ai-query").value.trim();
   if (!q) return;
-  document.getElementById("ai-response").textContent = "Thinking...";
-  const res = await fetch("/api/query/", {
+  document.getElementById("ai-response").textContent = "💭 Thinking with Gemini...";
+  const res = await fetch("/api/gemini-query/", {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers: { "Content-Type": "application/x-www-form-urlencoded", "X-CSRFToken": "{{ csrf_token }}" },
     body: new URLSearchParams({ query: q })
   });
   const data = await res.json();
-  document.getElementById("ai-response").textContent = data.response;
+  document.getElementById("ai-response").textContent = data.response || "⚠️ No response.";
 }
 
 // ----------------------------
@@ -170,7 +199,7 @@ async function boot(){
   await loadInsights();
 }
 boot();
-setInterval(boot, 20000);
+setInterval(boot, 30000);
 </script>
 
 <!-- Styling -->
@@ -190,20 +219,10 @@ setInterval(boot, 20000);
   border-radius: 6px;
   transition: all 0.2s ease;
 }
-.top-nav a:hover {
-  background: #1e2430;
-  color: #fff;
-}
-.top-nav a.active {
-  background: #2b90ff;
-  color: #fff;
-  border-radius: 24px;
-}
+.top-nav a:hover { background: #1e2430; color: #fff; }
+.top-nav a.active { background: #2b90ff; color: #fff; border-radius: 24px; }
 
-h2 {
-  margin-bottom: 15px;
-  color: #fafafa;
-}
+h2 { margin-bottom: 15px; color: #fafafa; }
 .cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -234,9 +253,8 @@ h2 {
   border: 1px solid #1f2633;
 }
 
-.predictive, .ai-insights, .ai-query {
-  margin-top: 35px;
-}
+.predictive, .ai-insights, .ai-query { margin-top: 35px; }
+
 .insight-box {
   background: #141820;
   padding: 18px;
@@ -244,6 +262,18 @@ h2 {
   border: 1px solid #1f2633;
   color: #d1d9e6;
 }
+
+.ai-stats {
+  background: #1a1e29;
+  border: 1px solid #252b3b;
+  border-radius: 10px;
+  margin-top: 15px;
+  padding: 15px;
+  color: #d1d9e6;
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
 .chat-container {
   background: #141820;
   border: 1px solid #1f2633;
