@@ -1,32 +1,70 @@
 {% extends "base.html" %}
 {% block content %}
 
+<!-- Top Navigation Tabs -->
+<nav class="top-nav">
+  <a href="/" class="active">Overview</a>
+  <a href="/tasks/">Tasks</a>
+  <a href="#ai-section">AI Insights</a>
+  <a href="#query-section">Query</a>
+  <a href="/upload/">Upload</a>
+  <a href="/admin/">Settings</a>
+</nav>
+
 <h2>📈 Team Productivity Dashboard</h2>
 
+<!-- Summary Cards -->
 <div class="cards">
-    <div class="card"><div class="label">Open</div><div class="value" id="openVal">0</div></div>
-    <div class="card"><div class="label">In Progress</div><div class="value" id="inprogVal">0</div></div>
-    <div class="card"><div class="label">Completed</div><div class="value" id="doneVal">0</div></div>
-    <div class="card"><div class="label">Blocked</div><div class="value" id="blockedVal">0</div></div>
-    <div class="card"><div class="label">Closed Today</div><div class="value" id="todayVal">0</div></div>
-    <div class="card"><div class="label">Last Hour</div><div class="value" id="hourVal">0</div></div>
-    <div class="card"><div class="label">Completion %</div><div class="value" id="rateVal">0%</div></div>
+  <div class="card"><div class="label">Open</div><div class="value" id="openVal">0</div></div>
+  <div class="card"><div class="label">In Progress</div><div class="value" id="inprogVal">0</div></div>
+  <div class="card"><div class="label">Completed</div><div class="value" id="doneVal">0</div></div>
+  <div class="card"><div class="label">Blocked</div><div class="value" id="blockedVal">0</div></div>
+  <div class="card"><div class="label">Closed Today</div><div class="value" id="todayVal">0</div></div>
+  <div class="card"><div class="label">Last Hour</div><div class="value" id="hourVal">0</div></div>
+  <div class="card"><div class="label">Completion %</div><div class="value" id="rateVal">0%</div></div>
 </div>
 
+<!-- Charts -->
 <section class="charts">
-    <div class="chart-container">
-        <h3>📆 7-Day Trends</h3>
-        <canvas id="trendChart"></canvas>
-    </div>
-    <div class="chart-container">
-        <h3>👩‍💻 Team Performance</h3>
-        <canvas id="teamChart"></canvas>
-    </div>
+  <div class="chart-container">
+    <h3>📆 7-Day Trends</h3>
+    <canvas id="trendChart"></canvas>
+  </div>
+  <div class="chart-container">
+    <h3>👩‍💻 Team Performance</h3>
+    <canvas id="teamChart"></canvas>
+  </div>
 </section>
 
+<!-- Predictive Analytics -->
+<section class="predictive">
+  <h3>📅 Predictive Analytics</h3>
+  <div id="predictive" class="insight-box">Fetching predictions...</div>
+</section>
+
+<!-- AI Insights -->
+<section class="ai-insights" id="ai-section">
+  <h3>🤖 AI Insights Summary</h3>
+  <div id="ai-summary" class="insight-box">Loading AI-generated insights...</div>
+</section>
+
+<!-- AI Query Assistant -->
+<section class="ai-query" id="query-section">
+  <h3>💬 Ask the AI</h3>
+  <div id="chat-box" class="chat-container">
+    <input type="text" id="ai-query" placeholder="Ask about team performance..." />
+    <button onclick="askAI()">Ask</button>
+    <div id="ai-response" class="ai-response"></div>
+  </div>
+</section>
+
+<!-- JS Logic -->
 <script>
 async function getJSON(url){ const res = await fetch(url); return res.json(); }
 
+// ----------------------------
+// Cards
+// ----------------------------
 async function refreshCards(){
   const s = await getJSON("/api/stats/");
   document.getElementById("openVal").textContent = s.open;
@@ -38,6 +76,9 @@ async function refreshCards(){
   document.getElementById("rateVal").textContent = s.completion_rate + "%";
 }
 
+// ----------------------------
+// Charts
+// ----------------------------
 let trendChart, teamChart;
 
 async function drawTrends(){
@@ -53,7 +94,11 @@ async function drawTrends(){
         { label: "Completed", data: t.completed, borderColor: "#45d483", fill: false }
       ]
     },
-    options: { responsive: true, plugins: { legend: { labels: { color: "#ccc" } } } }
+    options: {
+      responsive: true,
+      plugins: { legend: { labels: { color: "#ccc" } } },
+      scales: { x: { ticks: { color: "#ccc" } }, y: { ticks: { color: "#ccc" } } }
+    }
   });
 }
 
@@ -79,17 +124,82 @@ async function drawTeam(){
   });
 }
 
+// ----------------------------
+// Predictive Analytics
+// ----------------------------
+async function loadPredictive(){
+  const data = await getJSON("/api/predict/");
+  document.getElementById("predictive").innerHTML =
+    `<p>✅ Completed last 7 days: <b>${data.recent_completions}</b></p>
+     <p>🔮 Forecast for next week: <b>${data.forecast_next_week}</b> tasks</p>`;
+}
+
+// ----------------------------
+// AI Insights
+// ----------------------------
+async function loadInsights(){
+  const res = await fetch("/api/ai-insights/");
+  const data = await res.json();
+  document.getElementById("ai-summary").textContent = data.summary;
+}
+
+// ----------------------------
+// AI Query Assistant
+// ----------------------------
+async function askAI(){
+  const q = document.getElementById("ai-query").value.trim();
+  if (!q) return;
+  document.getElementById("ai-response").textContent = "Thinking...";
+  const res = await fetch("/api/query/", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ query: q })
+  });
+  const data = await res.json();
+  document.getElementById("ai-response").textContent = data.response;
+}
+
+// ----------------------------
+// Init
+// ----------------------------
 async function boot(){
   await refreshCards();
   await drawTrends();
   await drawTeam();
+  await loadPredictive();
+  await loadInsights();
 }
-
 boot();
 setInterval(boot, 20000);
 </script>
 
+<!-- Styling -->
 <style>
+.top-nav {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 20px;
+  background: #141820;
+  padding: 10px 15px;
+  border-radius: 8px;
+}
+.top-nav a {
+  color: #ccc;
+  text-decoration: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+.top-nav a:hover {
+  background: #1e2430;
+  color: #fff;
+}
+.top-nav a.active {
+  background: #2b90ff;
+  color: #fff;
+  border-radius: 24px;
+}
+
 h2 {
   margin-bottom: 15px;
   color: #fafafa;
@@ -111,6 +221,7 @@ h2 {
 .card:hover { transform: translateY(-4px); }
 .label { font-size: 0.85rem; color: #aab3c2; }
 .value { font-size: 1.6rem; font-weight: bold; margin-top: 5px; color: #4dd4ac; }
+
 .charts {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
@@ -122,5 +233,45 @@ h2 {
   border-radius: 12px;
   border: 1px solid #1f2633;
 }
+
+.predictive, .ai-insights, .ai-query {
+  margin-top: 35px;
+}
+.insight-box {
+  background: #141820;
+  padding: 18px;
+  border-radius: 10px;
+  border: 1px solid #1f2633;
+  color: #d1d9e6;
+}
+.chat-container {
+  background: #141820;
+  border: 1px solid #1f2633;
+  padding: 20px;
+  border-radius: 10px;
+}
+.chat-container input {
+  width: 75%;
+  padding: 8px;
+  border-radius: 6px;
+  border: none;
+  background: #1e2430;
+  color: #fff;
+}
+.chat-container button {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 6px;
+  background: #2b90ff;
+  color: #fff;
+  cursor: pointer;
+}
+.chat-container button:hover { background: #1573e2; }
+.ai-response {
+  margin-top: 12px;
+  color: #8be9fd;
+  white-space: pre-wrap;
+}
 </style>
+
 {% endblock %}

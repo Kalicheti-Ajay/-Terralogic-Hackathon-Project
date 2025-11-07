@@ -1,5 +1,7 @@
 import os
 import io
+import openai
+from django.views.decorators.csrf import csrf_exempt
 import pandas as pd
 from datetime import timedelta
 from django.conf import settings
@@ -11,6 +13,8 @@ from django.db.models import Count, Q
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from .models import Task
+from django.contrib.auth.decorators import login_required
+
 
 
 # --- helpers ---
@@ -40,6 +44,7 @@ def _parse_datetime(s):
 
 
 # --- pages ---
+@login_required
 def dashboard(request):
     return render(request, "dashboard.html")
 
@@ -179,3 +184,85 @@ def team_api(request):
         completed=Count("id", filter=Q(status="Completed")),
     ).order_by("assignee")
     return JsonResponse({"teams": list(qs)})
+
+
+@csrf_exempt
+def ai_insights(request):
+    stats = stats_api(request).content.decode()
+    prompt = f"""
+    You are a productivity analyst AI. Based on these metrics, generate a short summary of the team's performance, 
+    highlighting task completion rate, bottlenecks, and improvement suggestions.
+    Metrics: {stats}
+    """
+    openai.api_key = os.getenv("OPENAI_API_KEY", "your-key-here")
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "system", "content": prompt}]
+        )
+        summary = response.choices[0].message.content
+    except Exception as e:
+        summary = f"AI module error: {e}"
+    return JsonResponse({"summary": summary})
+
+@csrf_exempt
+def ai_query(request):
+    if request.method == "POST":
+        user_query = request.POST.get("query", "")
+        metrics = stats_api(request).content.decode()
+        context = f"Team metrics: {metrics}"
+        prompt = f"Answer this query about team productivity: {user_query}. Context: {context}"
+        openai.api_key = os.getenv("OPENAI_API_KEY", "your-key-here")
+        try:
+            response = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=[{"role": "system", "content": prompt}]
+            )
+            answer = response.choices[0].message.content
+        except Exception as e:
+            answer = f"Error: {e}"
+        return JsonResponse({"response": answer})
+
+def predictive_stats(request):
+    days = 7
+    now = timezone.now().date()
+    recent = Task.objects.filter(
+        completed_at__isnull=False,
+        completed_at__gte=now - timedelta(days=days)
+    ).count()
+    next_week_forecast = round(recent * 1.1)  # +10% trend assumption
+    return JsonResponse({
+        "recent_completions": recent,
+        "forecast_next_week": next_week_forecast
+    })
+
+@login_required
+def tasks_view(request):
+    # Fetch all tasks
+    tasks = Task.objects.all().order_by("assignee")
+
+    # Group by assignee
+    grouped = {}
+    for t in tasks:
+        if t.assignee not in grouped:
+            grouped[t.assignee] = {"assigned": 0, "completed": 0, "ongoing": 0}
+        grouped[t.assignee]["assigned"] += 1
+        if t.status == "Completed":
+            grouped[t.assignee]["completed"] += 1
+        else:
+            grouped[t.assignee]["ongoing"] += 1
+
+    # Compute project distribution
+    projects = (
+        Task.objects.values("project")
+        .annotate(
+            total=Count("id"),
+            open_issues=Count("id", filter=Q(status="Open")),
+        )
+        .order_by("project")
+    )
+
+    return render(request, "tasks.html", {
+        "tasks_summary": grouped,
+        "projects": list(projects),
+    })

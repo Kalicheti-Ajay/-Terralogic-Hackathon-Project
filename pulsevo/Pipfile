@@ -7,12 +7,10 @@ name = "pypi"
 django = "*"
 pandas = "*"
 openpyxl = "*"
-# optional if you plan to add Redis or AI features later
 redis = "*"
 djangorestframework = "*"
-# optional: for .env support if you store API keys
 python-dotenv = "*"
-
+openai = "*"
 
 [dev-packages]
 
