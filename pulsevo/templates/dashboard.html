@@ -1,25 +1,31 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>Today’s Overview</h2>
+
+<h2>📈 Team Productivity Dashboard</h2>
 
 <div class="cards">
-  <div class="card"><div class="k">Open</div><div id="openVal" class="v">0</div></div>
-  <div class="card"><div class="k">In Progress</div><div id="inprogVal" class="v">0</div></div>
-  <div class="card"><div class="k">Completed</div><div id="doneVal" class="v">0</div></div>
-  <div class="card"><div class="k">Blocked</div><div id="blockedVal" class="v">0</div></div>
-  <div class="card"><div class="k">Closed Today</div><div id="todayVal" class="v">0</div></div>
-  <div class="card"><div class="k">Last Hour</div><div id="hourVal" class="v">0</div></div>
-  <div class="card"><div class="k">Completion %</div><div id="rateVal" class="v">0%</div></div>
+    <div class="card"><div class="label">Open</div><div class="value" id="openVal">0</div></div>
+    <div class="card"><div class="label">In Progress</div><div class="value" id="inprogVal">0</div></div>
+    <div class="card"><div class="label">Completed</div><div class="value" id="doneVal">0</div></div>
+    <div class="card"><div class="label">Blocked</div><div class="value" id="blockedVal">0</div></div>
+    <div class="card"><div class="label">Closed Today</div><div class="value" id="todayVal">0</div></div>
+    <div class="card"><div class="label">Last Hour</div><div class="value" id="hourVal">0</div></div>
+    <div class="card"><div class="label">Completion %</div><div class="value" id="rateVal">0%</div></div>
 </div>
 
-<h3>7-Day Trend</h3>
-<canvas id="trendChart"></canvas>
-
-<h3>Team Performance</h3>
-<canvas id="teamChart"></canvas>
+<section class="charts">
+    <div class="chart-container">
+        <h3>📆 7-Day Trends</h3>
+        <canvas id="trendChart"></canvas>
+    </div>
+    <div class="chart-container">
+        <h3>👩‍💻 Team Performance</h3>
+        <canvas id="teamChart"></canvas>
+    </div>
+</section>
 
 <script>
-async function getJSON(url){ const r = await fetch(url, {headers:{"X-Requested-With":"fetch"}}); return r.json(); }
+async function getJSON(url){ const res = await fetch(url); return res.json(); }
 
 async function refreshCards(){
   const s = await getJSON("/api/stats/");
@@ -37,38 +43,39 @@ let trendChart, teamChart;
 async function drawTrends(){
   const t = await getJSON("/api/trends/");
   const ctx = document.getElementById("trendChart");
-  if (trendChart) trendChart.destroy();
+  if(trendChart) trendChart.destroy();
   trendChart = new Chart(ctx, {
     type: "line",
     data: {
       labels: t.labels,
       datasets: [
-        { label: "Tasks Created", data: t.created },
-        { label: "Tasks Completed", data: t.completed },
+        { label: "Created", data: t.created, borderColor: "#2b90ff", fill: false },
+        { label: "Completed", data: t.completed, borderColor: "#45d483", fill: false }
       ]
-    }
+    },
+    options: { responsive: true, plugins: { legend: { labels: { color: "#ccc" } } } }
   });
 }
 
 async function drawTeam(){
   const d = await getJSON("/api/team/");
-  const labels = d.teams.map(x => x.assignee);
-  const open = d.teams.map(x => x.open);
-  const inprog = d.teams.map(x => x.in_progress);
-  const done = d.teams.map(x => x.completed);
   const ctx = document.getElementById("teamChart");
-  if (teamChart) teamChart.destroy();
+  if(teamChart) teamChart.destroy();
   teamChart = new Chart(ctx, {
     type: "bar",
     data: {
-      labels,
+      labels: d.teams.map(x => x.assignee),
       datasets: [
-        { label: "Open", data: open },
-        { label: "In Progress", data: inprog },
-        { label: "Completed", data: done },
+        { label: "Open", data: d.teams.map(x => x.open), backgroundColor: "#ff7675" },
+        { label: "In Progress", data: d.teams.map(x => x.in_progress), backgroundColor: "#74b9ff" },
+        { label: "Completed", data: d.teams.map(x => x.completed), backgroundColor: "#55efc4" }
       ]
     },
-    options: { responsive: true, scales: { x: { stacked: true }, y: { stacked: true } } }
+    options: {
+      responsive: true,
+      plugins: { legend: { labels: { color: "#ccc" } } },
+      scales: { x: { ticks: { color: "#ccc" } }, y: { ticks: { color: "#ccc" } } }
+    }
   });
 }
 
@@ -77,7 +84,43 @@ async function boot(){
   await drawTrends();
   await drawTeam();
 }
+
 boot();
-setInterval(boot, 15000); // refresh every 15s
+setInterval(boot, 20000);
 </script>
+
+<style>
+h2 {
+  margin-bottom: 15px;
+  color: #fafafa;
+}
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 15px;
+  margin-bottom: 30px;
+}
+.card {
+  background: #161a23;
+  border: 1px solid #222835;
+  border-radius: 10px;
+  padding: 15px;
+  text-align: center;
+  transition: transform 0.2s ease;
+}
+.card:hover { transform: translateY(-4px); }
+.label { font-size: 0.85rem; color: #aab3c2; }
+.value { font-size: 1.6rem; font-weight: bold; margin-top: 5px; color: #4dd4ac; }
+.charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 25px;
+}
+.chart-container {
+  background: #141820;
+  padding: 20px;
+  border-radius: 12px;
+  border: 1px solid #1f2633;
+}
+</style>
 {% endblock %}

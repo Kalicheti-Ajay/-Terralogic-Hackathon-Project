@@ -1,10 +1,36 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>Upload Dataset (CSV / XLSX)</h2>
-<form method="post" enctype="multipart/form-data">
+<h2>📤 Upload Team Dataset</h2>
+
+<form method="post" enctype="multipart/form-data" class="upload-form">
   {% csrf_token %}
   <input type="file" name="file" accept=".csv,.xlsx,.xls" required />
   <button type="submit">Upload</button>
 </form>
-<p>Expected columns (case-insensitive): <code>Task ID, Title, Assignee, Status, Created At, [Completed At], [Project], [Priority], [Comments]</code></p>
+
+<p>Expected columns: <code>Task ID, Title, Assignee, Status, Created At, Completed At, Project, Priority, Comments</code></p>
+
+<style>
+.upload-form {
+  background: #141820;
+  border: 1px solid #1f2633;
+  padding: 30px;
+  border-radius: 12px;
+  display: inline-flex;
+  gap: 15px;
+}
+input[type=file] {
+  color: #ccc;
+}
+button {
+  background: #2b90ff;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-weight: 500;
+}
+button:hover { background: #1573e2; }
+</style>
 {% endblock %}

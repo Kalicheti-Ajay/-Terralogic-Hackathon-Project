@@ -1,24 +1,72 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>Pulsevo</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <link rel="stylesheet" href="/static/base.css">
-  <!-- Chart.js CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PULSEVO Dashboard</title>
+
+    <link rel="stylesheet" href="/static/base.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body {
+            font-family: "Poppins", system-ui, sans-serif;
+            margin: 0;
+            background-color: #0e1117;
+            color: #f1f5f9;
+        }
+        header {
+            background: #1c212b;
+            color: #fff;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #232832;
+        }
+        header h1 {
+            margin: 0;
+            font-size: 1.5rem;
+            letter-spacing: 1px;
+        }
+        nav a {
+            color: #aab3c2;
+            text-decoration: none;
+            margin-left: 15px;
+            font-weight: 500;
+        }
+        nav a:hover {
+            color: #fff;
+        }
+        main {
+            padding: 25px 40px;
+        }
+        footer {
+            margin-top: 40px;
+            text-align: center;
+            padding: 15px;
+            color: #7c889a;
+            border-top: 1px solid #1d222d;
+        }
+    </style>
 </head>
+
 <body>
-  <header class="topbar">
-    <h1>PULSEVO</h1>
-    <nav>
-      <a href="/">Dashboard</a>
-      <a href="/upload/">Upload</a>
-      <a href="/admin/">Admin</a>
-    </nav>
-  </header>
-  <main class="container">
-    {% block content %}{% endblock %}
-  </main>
+    <header>
+        <h1>PULSEVO</h1>
+        <nav>
+            <a href="/">Dashboard</a>
+            <a href="/upload/">Upload</a>
+            <a href="/admin/">Admin</a>
+        </nav>
+    </header>
+
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer>
+        Built with ❤️ by Ajay | Hackathon 2025 Pulsevo
+    </footer>
 </body>
 </html>

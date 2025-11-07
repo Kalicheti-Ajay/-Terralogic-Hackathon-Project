@@ -1,10 +1,12 @@
+import os
 import io
 import pandas as pd
 from datetime import timedelta
+from django.conf import settings
 from django.shortcuts import render, redirect
 from django.http import JsonResponse, HttpResponseBadRequest
 from django.utils import timezone
-from django.db import models                     # ✅ ADD THIS LINE
+from django.db import models
 from django.db.models import Count, Q
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
@@ -23,61 +25,84 @@ COL_MAP = {
     "priority": "priority",
     "comments": "comments",
 }
-STATUS_NORMALIZE = {"open":"Open","in progress":"In Progress","completed":"Completed","blocked":"Blocked"}
+STATUS_NORMALIZE = {
+    "open": "Open",
+    "in progress": "In Progress",
+    "completed": "Completed",
+    "blocked": "Blocked"
+}
+
 
 def _parse_datetime(s):
     if pd.isna(s) or s == "":
         return None
     return pd.to_datetime(s, errors="coerce")
 
+
 # --- pages ---
 def dashboard(request):
     return render(request, "dashboard.html")
+
 
 # --- upload (CSV/XLSX) ---
 def upload_dataset(request):
     if request.method == "POST" and request.FILES.get("file"):
         f = request.FILES["file"]
+
+        # ✅ Ensure upload directory exists
+        upload_dir = os.path.join(settings.MEDIA_ROOT, "uploads")
+        os.makedirs(upload_dir, exist_ok=True)
+
+        # ✅ Save uploaded file to media/uploads/
         path = default_storage.save(f"uploads/{f.name}", ContentFile(f.read()))
         file_bytes = default_storage.open(path).read()
 
-        # read with pandas
+        # ✅ Read with pandas
         if f.name.lower().endswith(".csv"):
             df = pd.read_csv(io.BytesIO(file_bytes))
         elif f.name.lower().endswith((".xlsx", ".xls")):
             df = pd.read_excel(io.BytesIO(file_bytes))
         else:
-            return HttpResponseBadRequest("Please upload CSV or Excel file.")
+            return HttpResponseBadRequest("Please upload a CSV or Excel file.")
 
-        # normalize columns
+        # ✅ Normalize columns
         df.columns = [c.strip().lower() for c in df.columns]
         df = df.rename(columns={c: COL_MAP.get(c, c) for c in df.columns})
 
-        required = {"task_id","title","assignee","status","created_at"}
+        required = {"task_id", "title", "assignee", "status", "created_at"}
         if not required.issubset(df.columns):
-            return HttpResponseBadRequest(f"Missing required columns: {required - set(df.columns)}")
+            return HttpResponseBadRequest(
+                f"Missing required columns: {required - set(df.columns)}"
+            )
 
+        # ✅ Insert or update tasks
         for _, row in df.iterrows():
-            status = STATUS_NORMALIZE.get(str(row.get("status","")).strip().lower(), str(row.get("status","")).strip() or "Open")
+            status = STATUS_NORMALIZE.get(
+                str(row.get("status", "")).strip().lower(),
+                str(row.get("status", "")).strip() or "Open"
+            )
             created_at = _parse_datetime(row.get("created_at"))
             completed_at = _parse_datetime(row.get("completed_at"))
 
             Task.objects.update_or_create(
                 task_id=str(row.get("task_id")).strip(),
                 defaults={
-                    "title": str(row.get("title","")).strip()[:200],
-                    "assignee": str(row.get("assignee","Unknown")).strip()[:100],
+                    "title": str(row.get("title", "")).strip()[:200],
+                    "assignee": str(row.get("assignee", "Unknown")).strip()[:100],
                     "status": status,
                     "created_at": created_at,
                     "completed_at": completed_at,
-                    "project": str(row.get("project","General")).strip()[:100],
-                    "priority": str(row.get("priority","Medium")).strip().title()[:10],
-                    "comments": str(row.get("comments","")).strip(),
+                    "project": str(row.get("project", "General")).strip()[:100],
+                    "priority": str(row.get("priority", "Medium")).strip().title()[:10],
+                    "comments": str(row.get("comments", "")).strip(),
                 }
             )
 
+        # ✅ Redirect to dashboard
         return redirect("dashboard")
+
     return render(request, "upload.html")
+
 
 # --- JSON APIs for charts/cards ---
 def stats_api(request):
@@ -92,13 +117,11 @@ def stats_api(request):
     blocked = Task.objects.filter(status="Blocked").count()
 
     closed_today = Task.objects.filter(
-        status="Completed",
-        completed_at__date=today
+        status="Completed", completed_at__date=today
     ).count()
 
     closed_last_hour = Task.objects.filter(
-        status="Completed",
-        completed_at__gte=last_hour
+        status="Completed", completed_at__gte=last_hour
     ).count()
 
     completion_rate = round((completed / total * 100), 1) if total else 0.0
@@ -114,6 +137,7 @@ def stats_api(request):
         "completion_rate": completion_rate,
         "server_time": now.isoformat(),
     })
+
 
 def trends_api(request):
     # last 7 days: created vs completed
@@ -145,6 +169,7 @@ def trends_api(request):
     completed = [completed_map.get(lbl, 0) for lbl in labels]
 
     return JsonResponse({"labels": labels, "created": created, "completed": completed})
+
 
 def team_api(request):
     # per-assignee distribution
