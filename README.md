@@ -175,11 +175,3 @@ pipenv run gunicorn your_project.wsgi:application --workers 3 --bind 0.0.0.0:800
 * Use `pipenv graph` to inspect dependency tree.
 
 ---
-
-## Author / Contact
-
-Made quick and clean by you. If you want, tell me the project name and I’ll tailor this README to include exact app commands (e.g., `manage.py` app names, celery tasks, or custom run commands).
-
----
-
-**License:** MIT (or change to whatever you want)
